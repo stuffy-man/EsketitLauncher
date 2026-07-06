@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8"/>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://mc-heads.net data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'"/>
+    <title>Esketit Launcher</title>
+    <link rel="stylesheet" href="assets/css/esketit.css"/>
+</head>
+<body>
+
+    <!-- ВЕРХНИЙ БАР -->
+    <div id="titlebar">
+        <div class="tb-left">
+            <img id="tbIcon" src="assets/images/esketit_e_letter.png" alt="E"/>
+        </div>
+        <div class="tb-ctrl">
+            <button class="wc" id="winMin" title="Свернуть"><svg viewBox="0 0 12 12"><line x1="2" y1="6" x2="10" y2="6"/></svg></button>
+            <button class="wc" id="winMax" title="Развернуть"><svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7"/></svg></button>
+            <button class="wc close" id="winClose" title="Закрыть"><svg viewBox="0 0 12 12"><line x1="3" y1="3" x2="9" y2="9"/><line x1="9" y1="3" x2="3" y2="9"/></svg></button>
+        </div>
+    </div>
+
+    <!-- ПЛАШКА ОБНОВЛЕНИЯ -->
+    <div id="updateBar" style="display:none">
+        <span id="updateText"></span>
+        <button class="btn sm" id="btnUpdateNow" style="display:none">Перезапустить</button>
+    </div>
+
+    <!-- ЗАГРУЗКА -->
+    <div id="loadingView" class="view active">
+        <div class="ring"><img src="assets/images/esketit_e.png" alt=""/></div>
+        <div class="subtitle" id="loadingText">Загрузка…</div>
+    </div>
+
+    <!-- ВХОД -->
+    <div id="loginView" class="view">
+        <img class="title-logo" src="assets/images/esketit_title.png" alt="ESKETIT"/>
+        <div class="splash" style="top:26%; right:16%">Погнали!!</div>
+        <div class="subtitle">Модовый сервер · Minecraft 1.20.1 · Forge</div>
+        <div class="menu">
+            <button class="btn wide" id="btnMicrosoft">
+                <svg viewBox="0 0 23 23"><path fill="#f35325" d="M1 1h10v10H1z"/><path fill="#81bc06" d="M12 1h10v10H12z"/><path fill="#05a6f0" d="M1 12h10v10H1z"/><path fill="#ffba08" d="M12 12h10v10H12z"/></svg>
+                Войти через Microsoft
+            </button>
+            <button class="btn wide" id="btnOffline">
+                <svg viewBox="0 0 24 24" fill="#ff5db5"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-4 0-8 2-8 5v3h16v-3c0-3-4-5-8-5z"/></svg>
+                Играть офлайн
+            </button>
+        </div>
+        <div class="foot-note left">ESKETIT v1.0.0</div>
+        <div class="foot-note right">Не связано с Mojang / Microsoft</div>
+    </div>
+
+    <!-- ОФЛАЙН-ВВОД -->
+    <div id="offlineView" class="view">
+        <img class="title-logo" src="assets/images/esketit_title.png" alt="ESKETIT" style="width:min(340px,60vw)"/>
+        <div class="subtitle">Введи ник для игры</div>
+        <div class="field">
+            <input class="mc-input" id="offlineNick" maxlength="16" placeholder="Ник" autocomplete="off"/>
+            <div class="err" id="offlineErr"></div>
+            <button class="btn wide" id="btnOfflineGo">Играть</button>
+            <button class="btn wide sm" id="btnOfflineBack">Назад</button>
+        </div>
+    </div>
+
+    <!-- ГЛАВНЫЙ -->
+    <div id="landingView" class="view">
+        <div class="hero">
+            <img class="title-logo" src="assets/images/esketit_title.png" alt="ESKETIT"/>
+            <div class="hero-tag" id="serverDesc">Сборка модов · Minecraft 1.20.1 · Forge</div>
+            <div class="status"><span class="dot" id="statusDot"></span> <span id="statusText">СЕРВЕР</span> <span class="m" id="playerCount"></span></div>
+            <div class="badges" id="badges"></div>
+            <div class="play-row">
+                <button class="btn big" id="btnPlay">ИГРАТЬ</button>
+                <div class="play-meta"><div id="playState">Готово к запуску</div><div class="s2" id="playSub"></div></div>
+            </div>
+            <div id="launchProgressWrap">
+                <div id="launchBar"><div id="launchBarFill"></div></div>
+                <div id="launchStatus"></div>
+            </div>
+        </div>
+        <div class="side">
+            <div class="panel player">
+                <div class="pfp" id="playerFace"></div>
+                <div style="flex:1">
+                    <div class="pname" id="playerName">Игрок</div>
+                    <div class="prole" id="playerRole">Офлайн-аккаунт</div>
+                </div>
+                <button class="btn sm" id="btnSwitch">Сменить</button>
+            </div>
+            <div class="panel" id="newsPanel" style="display:none">
+                <h4>Что нового</h4>
+                <div id="newsList"></div>
+            </div>
+            <div class="quick">
+                <button class="btn sm" id="btnSettings">Настройки</button>
+                <button class="btn sm" id="btnMods">Моды</button>
+                <button class="btn sm" id="btnFolder">Папка</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- НАСТРОЙКИ -->
+    <div id="settingsView" class="view">
+        <div class="settings-wrap">
+            <div class="settings-head">
+                <h2>НАСТРОЙКИ</h2>
+                <button class="btn sm" id="btnSettingsBack">← Назад</button>
+            </div>
+            <div class="settings-scroll">
+
+                <div class="set-section">
+                    <h3>Память и Java</h3>
+                    <div class="set-row"><label>Выделено памяти (макс.)</label>
+                        <input type="range" id="ramMax"/><span class="val" id="ramMaxVal">4 ГБ</span></div>
+                    <div class="set-row"><label>Минимум памяти</label>
+                        <input type="range" id="ramMin"/><span class="val" id="ramMinVal">4 ГБ</span></div>
+                    <div class="set-row"><label>Путь к Java <span class="hint">(пусто = авто)</span></label>
+                        <input class="mc-input small" id="javaExe" placeholder="авто" spellcheck="false"/></div>
+                    <div class="set-row col"><label>Доп. аргументы JVM</label>
+                        <textarea class="mc-input" id="jvmArgs" rows="2" spellcheck="false"></textarea></div>
+                </div>
+
+                <div class="set-section">
+                    <h3>Игра</h3>
+                    <div class="set-row"><label>Разрешение окна</label>
+                        <span class="res"><input class="mc-input tiny" id="resW"/> × <input class="mc-input tiny" id="resH"/></span></div>
+                    <div class="set-row"><label>Полноэкранный режим</label><button class="toggle" id="tgFull"></button></div>
+                    <div class="set-row"><label>Автоподключение к серверу</label><button class="toggle" id="tgAuto"></button></div>
+                    <div class="set-row"><label>Запуск отдельным процессом</label><button class="toggle" id="tgDetach"></button></div>
+                </div>
+
+                <div class="set-section">
+                    <h3>Лаунчер</h3>
+                    <div class="set-row"><label>Тестовые сборки (pre-release)</label><button class="toggle" id="tgPre"></button></div>
+                    <div class="set-row"><label>Папка данных</label>
+                        <span class="pathrow"><span class="prole" id="dataDir">—</span><button class="btn sm" id="btnOpenData">Открыть</button></span></div>
+                </div>
+
+                <div class="set-section">
+                    <h3>О программе</h3>
+                    <div class="set-row"><label>Версия</label><span class="prole">ESKETIT Launcher v1.0.0 · движок helios-core</span></div>
+                    <div class="set-row"><label>Сервер</label><span class="prole" id="setServerInfo">—</span></div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДЫ -->
+    <div id="modsView" class="view">
+        <div class="settings-wrap">
+            <div class="settings-head">
+                <h2>МОДЫ</h2>
+                <button class="btn sm" id="btnModsBack">← Назад</button>
+            </div>
+            <div class="settings-scroll" id="modsList"></div>
+        </div>
+    </div>
+
+    <script src="assets/js/esketit-ui.js"></script>
+</body>
+</html>

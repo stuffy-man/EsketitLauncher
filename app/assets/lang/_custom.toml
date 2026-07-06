@@ -1,0 +1,20 @@
+# Кастомный языковой файл лаунчера Esketit
+
+[ejs.app]
+title = "Esketit Launcher"
+
+[ejs.landing]
+mediaGitHubURL = "#"
+mediaXURL = "#"
+mediaInstagramURL = "#"
+mediaYouTubeURL = "#"
+mediaDiscordURL = "#"
+
+[ejs.settings]
+sourceGithubLink = "#"
+supportLink = "#"
+
+[ejs.welcome]
+welcomeHeader = "ДОБРО ПОЖАЛОВАТЬ НА ESKETIT"
+welcomeDescription = "Это официальный лаунчер сервера Esketit. Он сам скачает нужную версию Minecraft, Forge и все моды, будет держать сборку в актуальном состоянии и запускать игру в один клик. Поддерживаются как лицензионные, так и офлайн-аккаунты."
+welcomeDescCTA = "До запуска осталось всего несколько кликов."

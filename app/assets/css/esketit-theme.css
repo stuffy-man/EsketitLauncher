@@ -1,0 +1,138 @@
+/*******************************************************************************
+ *  ESKETIT THEME — Minecraft-стиль (слой поверх launcher.css)                  *
+ *  Шрифт Minecraft Rus · кнопка из PSD (9-slice) · текстурный фон · бевел      *
+ ******************************************************************************/
+
+@font-face{
+    font-family:'MinecraftRus';
+    src:url('../fonts/minecraft-rus.ttf') format('truetype');
+    font-weight:normal; font-style:normal; font-display:swap;
+}
+
+:root{
+    --e-pink:#ff5db5; --e-magenta:#d61f9a; --e-purple:#8b2fe6;
+    --e-gold:#ffd83d; --e-green:#5fe08a;
+    --e-sh:2px 2px 0 rgba(0,0,0,.6);
+    --e-btn:url('../images/mc-button.png');
+    --e-btn-hi:url('../images/mc-button-hover.png');
+}
+
+/* ─── Шрифт Minecraft на весь интерфейс ─────────────────────────────────────── */
+body, button, input, select, textarea,
+span, div, p, a, h1, h2, h3, h4, h5, li, label {
+    font-family:'MinecraftRus', 'Trebuchet MS', monospace !important;
+    font-synthesis:none;
+}
+
+/* ─── Тёмный текстурный фон (перебивает inline bg от uibinder) ──────────────── */
+body{
+    background:
+        linear-gradient(rgba(9,4,15,.72), rgba(9,4,15,.84)),
+        url('../images/mc-tile.png') !important;
+    background-size:auto, 72px 72px !important;
+    background-repeat:repeat !important;
+    background-attachment:fixed !important;
+    image-rendering:pixelated;
+}
+
+/* пиксельная тень у заметного текста — как в игре */
+#launch_button, #server_selection_button, #launch_progress_label, .bot_label,
+#user_text, #loginSubheader, #welcomeHeader, h1, h2, h3,
+.loginOptionButton span, #newsButtonText, .settingsTabHeader, #mojangStatusTooltipTitle {
+    text-shadow:var(--e-sh) !important;
+}
+
+/* ─── Кнопка PLAY — текстура из PSD (9-slice), пиксельная ───────────────────── */
+#launch_button{
+    background:none !important;
+    border:8px solid transparent !important;
+    border-image:var(--e-btn) 3 fill / 8px / 0 stretch !important;
+    border-radius:0 !important;
+    image-rendering:pixelated;
+    color:#fff !important;
+    letter-spacing:2px;
+    padding:8px 40px !important;
+    box-shadow:none !important;
+    transition:none !important;
+}
+#launch_button:hover, #launch_button:focus{
+    border-image-source:var(--e-btn-hi) !important;
+    outline:2px solid rgba(255,255,255,.75); outline-offset:-11px;
+    filter:none !important; transform:none !important;
+    color:#fff !important; text-shadow:var(--e-sh) !important;
+}
+#launch_button:active{ filter:brightness(.92) !important; }
+#launch_button:disabled{ filter:grayscale(.55) brightness(.65); pointer-events:none; }
+
+/* ─── Кнопки выбора входа (loginOptions) — текстура MC ──────────────────────── */
+.loginOptionButton{
+    background:none !important;
+    border:8px solid transparent !important;
+    border-image:var(--e-btn) 3 fill / 8px / 0 stretch !important;
+    border-radius:0 !important;
+    image-rendering:pixelated;
+    height:auto !important;
+    padding:14px 22px !important;
+    justify-content:center !important;
+    column-gap:10px !important;
+    backdrop-filter:none !important;
+    color:#fff;
+}
+.loginOptionButton:hover, .loginOptionButton:focus{
+    border-image-source:var(--e-btn-hi) !important;
+    outline:2px solid rgba(255,255,255,.7); outline-offset:-11px;
+    box-shadow:none !important;
+}
+.loginOptionButton span{ color:#fff; font-size:15px; }
+
+/* Кнопка выбора сервера */
+#server_selection_button:hover, #server_selection_button:focus{
+    color:var(--e-pink) !important; text-shadow:var(--e-sh) !important;
+}
+
+/* ─── Прогресс-бар запуска ──────────────────────────────────────────────────── */
+#launch_progress[value]{ height:6px !important; }
+#launch_progress[value]::-webkit-progress-bar{ background:rgba(255,255,255,.12) !important; }
+#launch_progress[value]::-webkit-progress-value{ background:var(--e-magenta) !important; }
+#launch_progress_label{ color:var(--e-pink) !important; }
+
+/* ─── Иконки соцсетей ───────────────────────────────────────────────────────── */
+.mediaSVG{ fill:rgba(255,255,255,.66); }
+.mediaSVG:hover, .mediaURL:focus .mediaSVG, .mediaSVG:active{ fill:var(--e-pink); }
+#settingsSVG:hover{ fill:var(--e-pink); }
+
+/* ─── Печать/аватар — брендовое свечение ────────────────────────────────────── */
+#image_seal{ filter:drop-shadow(0 0 12px rgba(255,79,176,.3)); }
+#avatarContainer{ box-shadow:0 0 0 2px #000, 0 0 16px rgba(255,79,176,.28); }
+
+/* ─── Блочные панели с бевелом (инвентарь/тултипы MC) ───────────────────────── */
+#settingsContent, .settingsAuthAccount, #newsContent, #serverSelectContent,
+#accountSelectContent, #logContainer{
+    border:2px solid #000 !important;
+    border-radius:0 !important;
+    box-shadow:inset 2px 2px 0 rgba(255,255,255,.10), inset -2px -2px 0 rgba(0,0,0,.5) !important;
+}
+#overlayContent{ border-radius:0 !important; }
+
+/* ─── Экран загрузки: кольцо-спиннер вместо надписи ─────────────────────────── */
+#loadSpinnerImage{ display:none !important; }
+#loadCenterImage{ filter:drop-shadow(0 0 22px rgba(255,79,176,.32)); }
+#loadSpinnerContainer::after{
+    content:''; position:absolute; width:320px; height:320px; border-radius:50%;
+    border:4px solid transparent; border-top-color:var(--e-pink); border-right-color:var(--e-purple);
+    box-shadow:0 0 24px rgba(255,79,176,.28);
+    animation:rotating 1.1s linear infinite;
+}
+
+/* ─── Логотип ESKETIT на экране входа ───────────────────────────────────────── */
+#esketitTitle{
+    width:min(440px, 74%); height:auto; display:block; margin:0 auto 6px;
+    image-rendering:auto; filter:drop-shadow(0 6px 14px rgba(0,0,0,.55));
+}
+#loginOptionsContent h2{ font-size:16px; letter-spacing:2px; color:var(--e-gold); text-shadow:var(--e-sh); }
+
+/* ─── Глобальные акценты ────────────────────────────────────────────────────── */
+::selection{ background:rgba(255,79,176,.35); }
+::-webkit-scrollbar{ width:10px; height:10px; }
+::-webkit-scrollbar-track{ background:rgba(0,0,0,.25); }
+::-webkit-scrollbar-thumb{ background:var(--e-magenta); border:2px solid #000; border-radius:0; }
