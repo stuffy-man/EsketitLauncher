@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8"/>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://mc-heads.net data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'"/>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://mc-heads.net data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src 'self' https://login.microsoftonline.com https://login.live.com https://user.auth.xboxlive.com https://xsts.auth.xboxlive.com https://api.minecraftservices.com"/>
     <title>Esketit Launcher</title>
     <link rel="stylesheet" href="assets/css/esketit.css"/>
 </head>
@@ -47,7 +47,8 @@
                 Играть офлайн
             </button>
         </div>
-        <div class="foot-note left">ESKETIT v1.0.0</div>
+        <div class="err" id="loginErr" style="display:none; max-width:420px; margin:14px auto 0"></div>
+        <div class="foot-note left">ESKETIT v1.0.1</div>
         <div class="foot-note right">Не связано с Mojang / Microsoft</div>
     </div>
 
@@ -139,7 +140,7 @@
 
                 <div class="set-section">
                     <h3>О программе</h3>
-                    <div class="set-row"><label>Версия</label><span class="prole">ESKETIT Launcher v1.0.0 · движок helios-core</span></div>
+                    <div class="set-row"><label>Версия</label><span class="prole">ESKETIT Launcher v1.0.1 · движок helios-core</span></div>
                     <div class="set-row"><label>Сервер</label><span class="prole" id="setServerInfo">—</span></div>
                 </div>
 

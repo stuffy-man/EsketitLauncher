@@ -26,28 +26,29 @@ function microsoftErrorDisplayable(errorCode) {
     switch (errorCode) {
         case MicrosoftErrorCode.NO_PROFILE:
             return {
-                title: Lang.queryJS('auth.microsoft.error.noProfileTitle'),
-                desc: Lang.queryJS('auth.microsoft.error.noProfileDesc')
+                title: 'Профиль Minecraft не найден',
+                desc: 'На этом аккаунте Microsoft нет профиля Minecraft: Java Edition. Если игра куплена (в т.ч. через Game Pass) — создайте профиль на minecraft.net. Если не куплена — вход через Microsoft недоступен, используйте «Играть офлайн».'
             }
         case MicrosoftErrorCode.NO_XBOX_ACCOUNT:
             return {
-                title: Lang.queryJS('auth.microsoft.error.noXboxAccountTitle'),
-                desc: Lang.queryJS('auth.microsoft.error.noXboxAccountDesc')
+                title: 'Нет аккаунта Xbox',
+                desc: 'К этому аккаунту Microsoft не привязан профиль Xbox. Войдите на xbox.com этим аккаунтом, чтобы создать его, и повторите.'
             }
         case MicrosoftErrorCode.XBL_BANNED:
             return {
-                title: Lang.queryJS('auth.microsoft.error.xblBannedTitle'),
-                desc: Lang.queryJS('auth.microsoft.error.xblBannedDesc')
+                title: 'Xbox Live недоступен',
+                desc: 'Xbox Live заблокирован или недоступен в вашем регионе.'
             }
         case MicrosoftErrorCode.UNDER_18:
             return {
-                title: Lang.queryJS('auth.microsoft.error.under18Title'),
-                desc: Lang.queryJS('auth.microsoft.error.under18Desc')
+                title: 'Требуется согласие взрослого',
+                desc: 'Аккаунт принадлежит несовершеннолетнему и должен быть добавлен в семейную группу Microsoft.'
             }
         case MicrosoftErrorCode.UNKNOWN:
+        default:
             return {
-                title: Lang.queryJS('auth.microsoft.error.unknownTitle'),
-                desc: Lang.queryJS('auth.microsoft.error.unknownDesc')
+                title: 'Ошибка входа Microsoft',
+                desc: 'Произошла неизвестная ошибка входа. Проверьте интернет и попробуйте ещё раз.'
             }
     }
 }
@@ -193,13 +194,17 @@ function computeOfflineUUID(username) {
  * @returns {Promise.<Object>} Промис с объектом созданного аккаунта.
  */
 exports.addOfflineAccount = async function(username) {
-    if(!username || !VALID_USERNAME.test(username.trim())) {
+    const name = (username || '').trim()
+    if(!VALID_USERNAME.test(name)) {
+        // Кириллический блок Unicode (в т.ч. буквы-двойники А/а/с/е/о, выглядящие как латиница).
+        const hasCyrillic = /[Ѐ-ӿ]/.test(name)
         return Promise.reject({
-            title: Lang.queryJS('login.error.invalidValue') || 'Некорректный ник',
-            desc: 'Ник должен содержать 1–16 символов: латиница, цифры или «_».'
+            title: 'Некорректный ник',
+            desc: hasCyrillic
+                ? 'В нике есть кириллица (похоже, включена русская раскладка). Ник нужен латиницей: буквы a–z, цифры и «_», 1–16 символов, без пробелов.'
+                : 'Ник должен содержать 1–16 символов: латиница (a–z), цифры или «_», без пробелов.'
         })
     }
-    const name = username.trim()
     const uuid = computeOfflineUUID(name)
     const ret = ConfigManager.addOfflineAuthAccount(uuid, name)
     ConfigManager.save()

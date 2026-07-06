@@ -1,13 +1,13 @@
 {
   "name": "esketitlauncher",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "productName": "Esketit Launcher",
   "description": "Лаунчер сервера Esketit (Forge + моды)",
   "author": "Esketit",
   "license": "UNLICENSED",
-  "homepage": "https://github.com/dscalzi/HeliosLauncher",
+  "homepage": "https://github.com/stuffy-man/EsketitLauncher",
   "bugs": {
-    "url": "https://github.com/dscalzi/HeliosLauncher/issues"
+    "url": "https://github.com/stuffy-man/EsketitLauncher/issues"
   },
   "private": true,
   "main": "index.js",

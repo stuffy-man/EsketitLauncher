@@ -167,16 +167,32 @@ $('btnOfflineBack').onclick = () => show('loginView')
 
 function doOffline(){
     const nick = $('offlineNick').value.trim()
-    AuthManager.addOfflineAccount(nick).then(() => {
-        enterLanding()
-    }).catch(err => {
-        $('offlineErr').textContent = (err && err.desc) || 'Некорректный ник'
-    })
+    // Двухаргументный then: обработчик ошибок ловит ТОЛЬКО отказ добавления аккаунта,
+    // а не возможные исключения enterLanding (иначе они маскируются под «неверный ник»).
+    AuthManager.addOfflineAccount(nick).then(
+        () => enterLanding(),
+        err => { $('offlineErr').textContent = (err && err.desc) || 'Некорректный ник' }
+    )
 }
 $('btnOfflineGo').onclick = doOffline
 $('offlineNick').addEventListener('keydown', e => { if(e.key === 'Enter') doOffline() })
 
+function showLoginError(err){
+    const el = $('loginErr')
+    if(!el) return
+    let msg
+    if(err && (err.title || err.desc)){
+        msg = [err.title, err.desc].filter(Boolean).join(' — ')
+    } else {
+        // сырое исключение (напр. аккаунт без Minecraft, сеть) — общее пояснение
+        msg = 'Не удалось войти через Microsoft. Убедись, что на этом аккаунте куплен Minecraft: Java Edition, и повтори попытку.'
+    }
+    el.innerHTML = msg
+    el.style.display = ''
+}
+
 $('btnMicrosoft').onclick = () => {
+    const le = $('loginErr'); if(le) le.style.display = 'none'
     $('loadingText').textContent = 'Ожидание входа Microsoft…'
     show('loadingView')
     ipcRenderer.send(MSFT_OPCODE.OPEN_LOGIN, 'landingView', 'loginView')
@@ -189,6 +205,7 @@ ipcRenderer.on(MSFT_OPCODE.REPLY_LOGIN, (event, type, data, view) => {
             enterLanding()
         }).catch(err => {
             console.error('Ошибка Microsoft-входа:', err)
+            showLoginError(err)
             show('loginView')
         })
     } else {
