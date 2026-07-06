@@ -157,20 +157,46 @@ function populateLanding(){
     }
 }
 
+// Простой TCP-чек доступности сервера — надёжно определяет онлайн (в отличие от
+// getServerStatus, чей парсер иногда падает на большом ответе Forge-сервера).
+function tcpPing(host, port, timeout = 4000){
+    return new Promise(resolve => {
+        const net = require('net')
+        let done = false
+        const finish = ok => { if(done) return; done = true; try { sock.destroy() } catch(e){}; resolve(ok) }
+        const sock = net.createConnection(port, host)
+        sock.setTimeout(timeout)
+        sock.on('connect', () => finish(true))
+        sock.on('timeout', () => finish(false))
+        sock.on('error', () => finish(false))
+    })
+}
+
 async function refreshStatus(){
     $('statusText').textContent = 'СЕРВЕР'
     $('statusDot').classList.add('off')
     $('playerCount').textContent = '· оффлайн'
     if(!server) return
+    const host = server.hostname
+    const port = server.port || 25565
+
+    // 1) Онлайн определяем по TCP — это надёжно.
+    const online = await tcpPing(host, port)
+    if(!online) return
+    $('statusDot').classList.remove('off')
+    $('statusText').textContent = 'ОНЛАЙН'
+    $('playerCount').textContent = ''
+
+    // 2) Число игроков — best-effort (парсер helios иногда падает, поэтому до 3 попыток).
     try {
         const { getServerStatus } = require('helios-core/mojang')
-        const st = await getServerStatus(47, server.hostname, server.port)
-        $('statusDot').classList.remove('off')
-        $('statusText').textContent = 'ОНЛАЙН'
-        $('playerCount').textContent = st && st.players ? `· ${st.players.online} / ${st.players.max} игроков` : ''
-    } catch(err){
-        // сервер недоступен — оставляем оффлайн
-    }
+        for(let i = 0; i < 3; i++){
+            try {
+                const st = await getServerStatus(47, host, port)
+                if(st && st.players){ $('playerCount').textContent = `· ${st.players.online} / ${st.players.max} игроков`; break }
+            } catch(e){ /* пробуем ещё раз */ }
+        }
+    } catch(e){ /* модуль/сеть — оставляем без счётчика */ }
 }
 
 // ─── Авторизация ────────────────────────────────────────────────────────────
@@ -289,7 +315,14 @@ function openFolder(dir){
 $('btnOpenData').onclick = () => openFolder(ConfigManager.getDataDirectory())
 
 // ─── Прочее ────────────────────────────────────────────────────────────────────
-$('btnFolder').onclick = () => openFolder(ConfigManager.getInstanceDirectory())
+// Открываем КОНКРЕТНУЮ папку сервера (гейм-директория: config, saves, resourcepacks,
+// логи), а не общий instances/. Моды лежат в common/modstore (архитектура Helios) —
+// в игровой папке их нет, это нормально.
+$('btnFolder').onclick = () => {
+    const sid = ConfigManager.getSelectedServer()
+    const dir = sid ? require('path').join(ConfigManager.getInstanceDirectory(), sid) : ConfigManager.getInstanceDirectory()
+    openFolder(dir)
+}
 // ─── Экран модов ───────────────────────────────────────────────────────────
 function collectMods(srv){
     const out = []
@@ -425,8 +458,12 @@ async function dlAsync(){
         DistroAPI.isDevMode()
     )
     fr.spawnReceiver()
-    fr.childProcess.on('error', err => launchFail(err.message || 'ошибка модуля проверки'))
-    fr.childProcess.on('close', code => { if(code !== 0) launchFail('модуль проверки завершился с кодом ' + code) })
+    // Флаг: мы сами закрываем приёмник после проверки/скачивания. Иначе его «close»
+    // с ненулевым кодом (от destroyReceiver) ложно вызывает «Ошибка запуска» —
+    // именно поэтому игра не стартовала с первого раза, а со второго стартовала.
+    let frClosedExpectedly = false
+    fr.childProcess.on('error', err => { if(!frClosedExpectedly) launchFail(err.message || 'ошибка модуля проверки') })
+    fr.childProcess.on('close', code => { if(!frClosedExpectedly && code !== 0) launchFail('модуль проверки завершился с кодом ' + code) })
 
     setStatus('Проверка файлов…'); setPct(0)
     let invalid = 0
@@ -439,6 +476,7 @@ async function dlAsync(){
         catch(e){ return launchFail('ошибка скачивания файлов') }
     }
     try { remote.getCurrentWindow().setProgressBar(-1) } catch(e){}
+    frClosedExpectedly = true
     fr.destroyReceiver()
 
     setStatus('Подготовка запуска…')
