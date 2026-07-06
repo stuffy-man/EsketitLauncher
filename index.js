@@ -344,8 +344,25 @@ function getPlatformIcon(filename){
     return path.join(__dirname, 'app', 'assets', 'images', `${filename}.${ext}`)
 }
 
-app.on('ready', createWindow)
-app.on('ready', createMenu)
+// Разрешаем только ОДИН экземпляр лаунчера. Иначе повторный запуск (двойной клик
+// по ярлыку, перезапуск после автообновления) плодит процессы, конфликтующие за
+// кэш в userData → окно виснет на «Загрузка…».
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+    app.quit()
+} else {
+    app.on('second-instance', () => {
+        // Пользователь запустил лаунчер ещё раз — просто показываем уже открытое окно.
+        if (win) {
+            if (win.isMinimized()) win.restore()
+            win.show()
+            win.focus()
+        }
+    })
+
+    app.on('ready', createWindow)
+    app.on('ready', createMenu)
+}
 
 app.on('window-all-closed', () => {
     // On macOS it is common for applications and their menu bar
