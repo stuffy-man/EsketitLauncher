@@ -274,12 +274,18 @@ bindToggle('tgFull', v => ConfigManager.setFullscreen(v))
 bindToggle('tgAuto', v => ConfigManager.setAutoConnect(v))
 bindToggle('tgDetach', v => ConfigManager.setLaunchDetached(v))
 bindToggle('tgPre', v => ConfigManager.setAllowPrerelease(v))
-$('btnOpenData').onclick = () => { try { shell.openPath(ConfigManager.getDataDirectory()) } catch(e){ console.error(e) } }
+// Открыть папку в проводнике. Папку заранее создаём — иначе (до первого запуска
+// игры) её может не быть, и openPath молча ничего не делает.
+function openFolder(dir){
+    try {
+        require('fs').mkdirSync(dir, { recursive: true })
+        shell.openPath(dir).then(err => { if(err) console.error('openPath:', err) })
+    } catch(e){ console.error('openFolder:', e) }
+}
+$('btnOpenData').onclick = () => openFolder(ConfigManager.getDataDirectory())
 
 // ─── Прочее ────────────────────────────────────────────────────────────────────
-$('btnFolder').onclick = () => {
-    try { shell.openPath(ConfigManager.getInstanceDirectory()) } catch(e){ console.error(e) }
-}
+$('btnFolder').onclick = () => openFolder(ConfigManager.getInstanceDirectory())
 // ─── Экран модов ───────────────────────────────────────────────────────────
 function collectMods(srv){
     const out = []

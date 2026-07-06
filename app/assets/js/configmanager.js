@@ -63,9 +63,10 @@ function resolveSelectedRAM(ram) {
     if(ram?.recommended != null) {
         return `${ram.recommended}M`
     } else {
-        // Legacy behavior
+        // По умолчанию 10 ГБ (сборка тяжёлая, 324 мода). На слабых ПК — меньше,
+        // чтобы игра не падала из-за нехватки памяти.
         const mem = os.totalmem()
-        return mem >= (8*1073741824) ? '4G' : (mem >= (6*1073741824) ? '3G' : '2G')
+        return mem >= (12*1073741824) ? '10G' : (mem >= (10*1073741824) ? '8G' : (mem >= (8*1073741824) ? '6G' : (mem >= (6*1073741824) ? '4G' : '2G')))
     }
 }
 
