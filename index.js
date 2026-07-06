@@ -99,20 +99,6 @@ ipcMain.on('win-minimize', () => { if(win) win.minimize() })
 ipcMain.on('win-maximize', () => { if(win){ win.isMaximized() ? win.unmaximize() : win.maximize() } })
 ipcMain.on('win-close', () => { if(win) win.close() })
 
-// Рендер переключился на реальный экран (не «Загрузка»). Если окно ещё скрыто —
-// показываем его сейчас: свежая композиция гарантированно рисует актуальный DOM,
-// без залипшего кадра загрузки. Если уже видно — принудительно перерисовываем.
-ipcMain.on('ui-ready', () => {
-    if(!win || win.isDestroyed()) return
-    try {
-        if(!win.isVisible()){
-            win.show()
-            win.focus()
-        } else {
-            win.webContents.invalidate()
-        }
-    } catch(e){ /* no-op */ }
-})
 
 // Handle trash item.
 ipcMain.handle(SHELL_OPCODE.TRASH_ITEM, async (event, ...args) => {
@@ -254,11 +240,11 @@ function createWindow() {
         height: 552,
         icon: getPlatformIcon('esketit_e'),
         frame: false,
-        show: false, // покажем окно только когда рендер переключится на реальный экран
         webPreferences: {
             preload: path.join(__dirname, 'app', 'assets', 'js', 'preloader.js'),
             nodeIntegration: true,
-            contextIsolation: false
+            contextIsolation: false,
+            backgroundThrottling: false // не троттлить отрисовку — иначе окно залипает на кадре
         },
         backgroundColor: '#171614'
     })
@@ -271,10 +257,6 @@ function createWindow() {
     Object.entries(data).forEach(([key, val]) => ejse.data(key, val))
 
     win.loadURL(pathToFileURL(path.join(__dirname, 'app', 'esketit.html')).toString())
-
-    // Страховка: если рендер по какой-то причине не подаст сигнал — показываем всё равно.
-    const showFallback = setTimeout(() => { if(win && !win.isDestroyed() && !win.isVisible()) win.show() }, 5000)
-    win.on('closed', () => clearTimeout(showFallback))
 
     win.removeMenu()
 
@@ -373,10 +355,11 @@ if (!gotSingleInstanceLock) {
     app.quit()
 } else {
     app.on('second-instance', () => {
-        // Пользователь запустил лаунчер ещё раз — просто показываем уже открытое окно.
-        if (win) {
+        // Пользователь запустил лаунчер ещё раз. Показываем/фокусируем окно ТОЛЬКО если
+        // оно уже видимо (прошло экран загрузки). Если ещё скрыто (идёт загрузка) —
+        // НЕ трогаем: иначе покажем залипший кадр «Загрузка…». Оно само покажется по ui-ready.
+        if (win && win.isVisible()) {
             if (win.isMinimized()) win.restore()
-            win.show()
             win.focus()
         }
     })

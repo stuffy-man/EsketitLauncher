@@ -18,14 +18,7 @@ DistroAPI.instanceDir = ConfigManager.getInstanceDirectory()
 
 const $ = (id) => document.getElementById(id)
 const VIEWS = ['loadingView', 'loginView', 'offlineView', 'landingView', 'settingsView', 'modsView']
-function show(id){
-    VIEWS.forEach(v => $(v).classList.toggle('active', v === id))
-    // Переключились на реальный экран — сигналим главному процессу показать/перерисовать окно
-    // (окно создаётся скрытым, чтобы не залипал кадр «Загрузка…» на части ПК).
-    if(id !== 'loadingView'){
-        requestAnimationFrame(() => requestAnimationFrame(() => { try { ipcRenderer.send('ui-ready') } catch(e){} }))
-    }
-}
+function show(id){ VIEWS.forEach(v => $(v).classList.toggle('active', v === id)) }
 
 let distribution = null
 let server = null
@@ -35,7 +28,15 @@ async function init(){
     try {
         distribution = await DistroAPI.getDistribution()
         server = distribution.getServerById(ConfigManager.getSelectedServer()) || distribution.getMainServer()
-        if(server){ ConfigManager.setSelectedServer(server.rawServer.id); ConfigManager.save() }
+        if(server){
+            ConfigManager.setSelectedServer(server.rawServer.id)
+            // Гарантируем наличие java-конфига для сервера. Без этого getMaxRAM/getMinRAM
+            // бросают TypeError и главный экран не открывается («вечная загрузка»).
+            try {
+                ConfigManager.ensureJavaConfig(server.rawServer.id, server.effectiveJavaOptions || { suggestedMajor: 17 })
+            } catch(e){ console.error('ensureJavaConfig:', e) }
+            ConfigManager.save()
+        }
     } catch(err){
         console.error('Не удалось загрузить дистрибутив:', err)
     }
@@ -148,7 +149,7 @@ function populateLanding(){
         const items = ['MC ' + raw.minecraftVersion, 'Forge']
         const mc = countMods(server); if(mc > 0) items.push(mc + ' модов')
         items.forEach(t => { const s = document.createElement('span'); s.className = 'badge'; s.textContent = t; badges.appendChild(s) })
-        $('playSub').textContent = 'ОЗУ: ' + ConfigManager.getMaxRAM(raw.id)
+        try { $('playSub').textContent = 'ОЗУ: ' + ConfigManager.getMaxRAM(raw.id) } catch(e){ $('playSub').textContent = '' }
     }
 }
 
