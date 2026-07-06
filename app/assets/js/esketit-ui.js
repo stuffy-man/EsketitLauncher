@@ -35,6 +35,10 @@ async function init(){
             try {
                 ConfigManager.ensureJavaConfig(server.rawServer.id, server.effectiveJavaOptions || { suggestedMajor: 17 })
             } catch(e){ console.error('ensureJavaConfig:', e) }
+            // Гарантируем конфигурацию модов — иначе ProcessBuilder падает на null.mods.
+            if(!ConfigManager.getModConfiguration(server.rawServer.id)){
+                ConfigManager.setModConfiguration(server.rawServer.id, { id: server.rawServer.id, mods: {} })
+            }
             ConfigManager.save()
         }
     } catch(err){
@@ -443,6 +447,11 @@ async function dlAsync(){
     const modLoaderData = await dip.loadModLoaderVersionJson(serv)
     const versionData = await mip.getVersionJson()
 
+    // Подстраховка: ProcessBuilder читает getModConfiguration(id).mods — без записи будет null.mods.
+    if(!ConfigManager.getModConfiguration(serv.rawServer.id)){
+        ConfigManager.setModConfiguration(serv.rawServer.id, { id: serv.rawServer.id, mods: {} })
+        ConfigManager.save()
+    }
     const authUser = ConfigManager.getSelectedAccount()
     const pb = new ProcessBuilder(serv, versionData, modLoaderData, authUser, remote.app.getVersion())
     setStatus('Запуск игры…')
@@ -455,6 +464,7 @@ async function dlAsync(){
         $('playState').textContent = 'Готово, приятной игры!'
         gameProc.on('close', () => { gameProc = null })
     } catch(err){
+        console.error('ProcessBuilder.build:', (err && err.stack) || err)
         launchFail('ошибка запуска игры (см. консоль)')
     }
 }
