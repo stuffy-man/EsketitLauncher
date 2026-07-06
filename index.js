@@ -13,6 +13,11 @@ const { pathToFileURL }                 = require('url')
 const { AZURE_CLIENT_ID, MSFT_OPCODE, MSFT_REPLY_TYPE, MSFT_ERROR, SHELL_OPCODE } = require('./app/assets/js/ipcconstants')
 const LangLoader                        = require('./app/assets/js/langloader')
 
+// На части Windows-конфигураций GPU-композитинг Electron не перерисовывает окно
+// после смены экрана — оно «залипает» на кадре «Загрузка…», хотя приложение уже
+// на главном экране. Программная отрисовка убирает это залипание.
+app.disableHardwareAcceleration()
+
 // Setup Lang
 LangLoader.setupLanguage()
 
@@ -93,6 +98,21 @@ ipcMain.on('distributionIndexDone', (event, res) => {
 ipcMain.on('win-minimize', () => { if(win) win.minimize() })
 ipcMain.on('win-maximize', () => { if(win){ win.isMaximized() ? win.unmaximize() : win.maximize() } })
 ipcMain.on('win-close', () => { if(win) win.close() })
+
+// На части конфигураций окно не перерисовывается после смены экрана и залипает на
+// кадре «Загрузка…» (DOM при этом уже на нужном экране). Рендер просит форс-перерисовку —
+// микро-ресайз заставляет ОС/композитор перерисовать окно целиком.
+ipcMain.on('force-repaint', () => {
+    if(!win || win.isDestroyed()) return
+    try {
+        win.webContents.invalidate()
+        if(!win.isMaximized() && !win.isFullScreen()){
+            const [w, h] = win.getSize()
+            win.setSize(w, h + 1)
+            win.setSize(w, h)
+        }
+    } catch(e){ /* no-op */ }
+})
 
 // Handle trash item.
 ipcMain.handle(SHELL_OPCODE.TRASH_ITEM, async (event, ...args) => {
