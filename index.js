@@ -99,17 +99,17 @@ ipcMain.on('win-minimize', () => { if(win) win.minimize() })
 ipcMain.on('win-maximize', () => { if(win){ win.isMaximized() ? win.unmaximize() : win.maximize() } })
 ipcMain.on('win-close', () => { if(win) win.close() })
 
-// На части конфигураций окно не перерисовывается после смены экрана и залипает на
-// кадре «Загрузка…» (DOM при этом уже на нужном экране). Рендер просит форс-перерисовку —
-// микро-ресайз заставляет ОС/композитор перерисовать окно целиком.
-ipcMain.on('force-repaint', () => {
+// Рендер переключился на реальный экран (не «Загрузка»). Если окно ещё скрыто —
+// показываем его сейчас: свежая композиция гарантированно рисует актуальный DOM,
+// без залипшего кадра загрузки. Если уже видно — принудительно перерисовываем.
+ipcMain.on('ui-ready', () => {
     if(!win || win.isDestroyed()) return
     try {
-        win.webContents.invalidate()
-        if(!win.isMaximized() && !win.isFullScreen()){
-            const [w, h] = win.getSize()
-            win.setSize(w, h + 1)
-            win.setSize(w, h)
+        if(!win.isVisible()){
+            win.show()
+            win.focus()
+        } else {
+            win.webContents.invalidate()
         }
     } catch(e){ /* no-op */ }
 })
@@ -254,6 +254,7 @@ function createWindow() {
         height: 552,
         icon: getPlatformIcon('esketit_e'),
         frame: false,
+        show: false, // покажем окно только когда рендер переключится на реальный экран
         webPreferences: {
             preload: path.join(__dirname, 'app', 'assets', 'js', 'preloader.js'),
             nodeIntegration: true,
@@ -271,9 +272,9 @@ function createWindow() {
 
     win.loadURL(pathToFileURL(path.join(__dirname, 'app', 'esketit.html')).toString())
 
-    /*win.once('ready-to-show', () => {
-        win.show()
-    })*/
+    // Страховка: если рендер по какой-то причине не подаст сигнал — показываем всё равно.
+    const showFallback = setTimeout(() => { if(win && !win.isDestroyed() && !win.isVisible()) win.show() }, 5000)
+    win.on('closed', () => clearTimeout(showFallback))
 
     win.removeMenu()
 

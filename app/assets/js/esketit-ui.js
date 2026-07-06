@@ -20,10 +20,10 @@ const $ = (id) => document.getElementById(id)
 const VIEWS = ['loadingView', 'loginView', 'offlineView', 'landingView', 'settingsView', 'modsView']
 function show(id){
     VIEWS.forEach(v => $(v).classList.toggle('active', v === id))
-    // Уходим с экрана загрузки — просим главный процесс форсировать перерисовку окна
-    // (на части ПК окно залипает на кадре «Загрузка…», хотя DOM уже переключился).
+    // Переключились на реальный экран — сигналим главному процессу показать/перерисовать окно
+    // (окно создаётся скрытым, чтобы не залипал кадр «Загрузка…» на части ПК).
     if(id !== 'loadingView'){
-        requestAnimationFrame(() => { try { ipcRenderer.send('force-repaint') } catch(e){} })
+        requestAnimationFrame(() => requestAnimationFrame(() => { try { ipcRenderer.send('ui-ready') } catch(e){} }))
     }
 }
 
