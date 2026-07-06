@@ -450,34 +450,55 @@ async function dlAsync(){
     catch(e){ return launchFail('Не удалось загрузить дистрибутив') }
     const serv = distro.getServerById(ConfigManager.getSelectedServer())
 
-    const fr = new FullRepair(
-        ConfigManager.getCommonDirectory(),
-        ConfigManager.getInstanceDirectory(),
-        ConfigManager.getLauncherDirectory(),
-        ConfigManager.getSelectedServer(),
-        DistroAPI.isDevMode()
-    )
-    fr.spawnReceiver()
-    // Флаг: мы сами закрываем приёмник после проверки/скачивания. Иначе его «close»
-    // с ненулевым кодом (от destroyReceiver) ложно вызывает «Ошибка запуска» —
-    // именно поэтому игра не стартовала с первого раза, а со второго стартовала.
-    let frClosedExpectedly = false
-    fr.childProcess.on('error', err => { if(!frClosedExpectedly) launchFail(err.message || 'ошибка модуля проверки') })
-    fr.childProcess.on('close', code => { if(!frClosedExpectedly && code !== 0) launchFail('модуль проверки завершился с кодом ' + code) })
+    // Оптимизация: полную проверку файлов (хеширование сотен МБ) делаем ТОЛЬКО если
+    // сборка изменилась с прошлого успешного запуска. Иначе каждый запуск = долгое
+    // «зависание» на «Проверке файлов». Подпись = хеш всего дистрибутива.
+    const _fs = require('fs'), _path = require('path'), _crypto = require('crypto')
+    const sigFile = _path.join(ConfigManager.getInstanceDirectory(), serv.rawServer.id, '.esketit_verified')
+    let distroSig = ''
+    try { distroSig = _crypto.createHash('md5').update(JSON.stringify(distro.rawDistribution)).digest('hex') } catch(e){}
+    let needVerify = true
+    try {
+        if(distroSig
+           && _fs.existsSync(sigFile) && _fs.readFileSync(sigFile, 'utf8').trim() === distroSig
+           && _fs.existsSync(ConfigManager.getCommonDirectory())){
+            needVerify = false
+        }
+    } catch(e){}
+    // сбрасываем подпись — если запуск не дойдёт до конца, следующий раз перепроверит
+    try { if(_fs.existsSync(sigFile)) _fs.unlinkSync(sigFile) } catch(e){}
 
-    setStatus('Проверка файлов…'); setPct(0)
-    let invalid = 0
-    try { invalid = await fr.verifyFiles(p => setPct(p)); setPct(100) }
-    catch(e){ return launchFail('ошибка проверки файлов') }
+    if(needVerify){
+        const fr = new FullRepair(
+            ConfigManager.getCommonDirectory(),
+            ConfigManager.getInstanceDirectory(),
+            ConfigManager.getLauncherDirectory(),
+            ConfigManager.getSelectedServer(),
+            DistroAPI.isDevMode()
+        )
+        fr.spawnReceiver()
+        // Флаг: мы сами закрываем приёмник после проверки/скачивания. Иначе его «close»
+        // с ненулевым кодом (от destroyReceiver) ложно вызывает «Ошибка запуска».
+        let frClosedExpectedly = false
+        fr.childProcess.on('error', err => { if(!frClosedExpectedly) launchFail(err.message || 'ошибка модуля проверки') })
+        fr.childProcess.on('close', code => { if(!frClosedExpectedly && code !== 0) launchFail('модуль проверки завершился с кодом ' + code) })
 
-    if(invalid > 0){
-        setStatus('Скачивание файлов…'); setPct(0)
-        try { await fr.download(p => setDlPct(p)); setDlPct(100) }
-        catch(e){ return launchFail('ошибка скачивания файлов') }
+        setStatus('Проверка файлов…'); setPct(0)
+        let invalid = 0
+        try { invalid = await fr.verifyFiles(p => setPct(p)); setPct(100) }
+        catch(e){ return launchFail('ошибка проверки файлов') }
+
+        if(invalid > 0){
+            setStatus('Скачивание файлов…'); setPct(0)
+            try { await fr.download(p => setDlPct(p)); setDlPct(100) }
+            catch(e){ return launchFail('ошибка скачивания файлов') }
+        }
+        try { remote.getCurrentWindow().setProgressBar(-1) } catch(e){}
+        frClosedExpectedly = true
+        fr.destroyReceiver()
+    } else {
+        setStatus('Файлы актуальны'); setPct(100)
     }
-    try { remote.getCurrentWindow().setProgressBar(-1) } catch(e){}
-    frClosedExpectedly = true
-    fr.destroyReceiver()
 
     setStatus('Подготовка запуска…')
     const mip = new MojangIndexProcessor(ConfigManager.getCommonDirectory(), serv.rawServer.minecraftVersion)
@@ -498,6 +519,9 @@ async function dlAsync(){
     const tmp = data => { if(GAME_LAUNCH_REGEX.test(String(data).trim())){ const d = Date.now() - startT; d < 5000 ? setTimeout(onDone, 5000 - d) : onDone() } }
     try {
         gameProc = pb.build()
+        // Сборка проверена и запущена — запоминаем подпись, чтобы следующий запуск
+        // пропустил долгую проверку файлов (пока сборка не изменится).
+        try { _fs.mkdirSync(_path.dirname(sigFile), { recursive: true }); _fs.writeFileSync(sigFile, distroSig) } catch(e){}
         gameProc.stdout.on('data', tmp)
         $('playState').textContent = 'Готово, приятной игры!'
         gameProc.on('close', () => { gameProc = null })
