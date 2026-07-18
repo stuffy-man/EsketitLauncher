@@ -314,6 +314,45 @@ function openFolder(dir){
 }
 $('btnOpenData').onclick = () => openFolder(ConfigManager.getDataDirectory())
 
+// Экспорт текущего инстанса в zip для Prism/MultiMC (mmc-pack.json + instance.cfg + .minecraft/).
+ipcRenderer.on('export-instance-progress', (event, { done, total }) => {
+    $('exportInstanceStatus').textContent = `Упаковка: ${done} / ${total}`
+})
+$('btnExportInstance').onclick = async () => {
+    if(!server){ return }
+    const statusEl = $('exportInstanceStatus')
+    const btn = $('btnExportInstance')
+    const hosted = server.rawServer.modules.find(m => m.type === 'ForgeHosted')
+    const mcVer = server.rawServer.minecraftVersion
+    let forgeVer = '47.4.20'
+    if(hosted){
+        const full = hosted.id.split(':').pop() // "1.20.1-47.4.20"
+        forgeVer = full.substring(mcVer.length + 1)
+    }
+    btn.disabled = true
+    statusEl.textContent = 'Упаковка...'
+    try {
+        const res = await ipcRenderer.invoke('export-instance', {
+            serverId: server.rawServer.id,
+            minecraftVersion: mcVer,
+            forgeVersion: forgeVer,
+            instanceName: server.rawServer.name || 'EsketitCraft'
+        })
+        if(res.canceled){
+            statusEl.textContent = ''
+        } else if(res.success){
+            statusEl.textContent = `Готово: ${res.fileCount} файлов сохранено`
+        } else {
+            statusEl.textContent = 'Ошибка: ' + (res.error || 'неизвестно')
+        }
+    } catch(e){
+        console.error('export-instance:', e)
+        statusEl.textContent = 'Ошибка экспорта'
+    } finally {
+        btn.disabled = false
+    }
+}
+
 // ─── Прочее ────────────────────────────────────────────────────────────────────
 // Открываем КОНКРЕТНУЮ папку сервера (гейм-директория: config, saves, resourcepacks,
 // логи), а не общий instances/. Моды лежат в common/modstore (архитектура Helios) —
@@ -432,9 +471,45 @@ async function play(){
     }
 }
 
+// Windows x64 Java 17 download mirrors. api.adoptium.net (used by helios-core's latestOpenJDK) is
+// unreliable/blocked in some regions and makes the launcher hang forever on "Поиск подходящей Java…".
+// Instead we download a fixed Adoptium JRE .zip DIRECTLY from GitHub Releases: first our own
+// esketit-dist mirror (reachable by anyone who already downloaded the modpack from there), then
+// Adoptium's own GitHub release (bypasses the API). The Adoptium API stays only as a last resort.
+const JAVA_MIRRORS = {
+    17: [
+        'https://github.com/stuffy-man/esketit-dist/releases/download/runtime/OpenJDK17U-jre_x64_windows_hotspot_17.0.19_10.zip',
+        'https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.19%2B10/OpenJDK17U-jre_x64_windows_hotspot_17.0.19_10.zip'
+    ]
+}
+
 async function downloadJava(opts){
-    const asset = await latestOpenJDK(opts.suggestedMajor, ConfigManager.getDataDirectory(), opts.distribution)
+    const path = require('path'), fs = require('fs')
+    const major = opts.suggestedMajor || 17
+    const dataDir = ConfigManager.getDataDirectory()
+    const runtimeDir = path.join(dataDir, 'runtime', process.arch)
+
+    // 1) Region-safe mirrors first (direct GitHub .zip, no api.adoptium.net query → no hang).
+    for(const url of (JAVA_MIRRORS[major] || [])){
+        try {
+            fs.mkdirSync(runtimeDir, { recursive: true })
+            const dest = path.join(runtimeDir, path.basename(url.split('?')[0]))
+            setStatus('Скачивание Java (один раз)…')
+            await downloadFile(url, dest, ({ percent }) => setDlPct(Math.trunc((percent || 0) * 100)))
+            setDlPct(100)
+            setStatus('Распаковка Java…')
+            const exe = await extractJdk(dest)
+            try { remote.getCurrentWindow().setProgressBar(-1) } catch(e){}
+            if(exe && fs.existsSync(exe)) return exe
+            console.warn('[Java] mirror extracted but javaw.exe missing:', url)
+        } catch(e){ console.error('[Java] mirror failed:', url, (e && e.message) || e) }
+    }
+
+    // 2) Last resort: Adoptium API (original behaviour) — may hang in blocked regions.
+    console.warn('[Java] all mirrors failed — falling back to Adoptium API')
+    const asset = await latestOpenJDK(major, dataDir, opts.distribution)
     if(!asset) throw new Error('Не найден пакет Java')
+    setStatus('Скачивание Java (один раз)…')
     await downloadFile(asset.url, asset.path, ({ transferred }) => setDlPct(Math.trunc((transferred / asset.size) * 100)))
     setDlPct(100)
     setStatus('Распаковка Java…')

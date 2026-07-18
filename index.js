@@ -2,7 +2,8 @@ const remoteMain = require('@electron/remote/main')
 remoteMain.initialize()
 
 // Requirements
-const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, Menu, shell, dialog } = require('electron')
+const AdmZip                            = require('adm-zip')
 const autoUpdater                       = require('electron-updater').autoUpdater
 const ejse                              = require('ejs-electron')
 const fs                                = require('fs')
@@ -98,6 +99,92 @@ ipcMain.on('distributionIndexDone', (event, res) => {
 ipcMain.on('win-minimize', () => { if(win) win.minimize() })
 ipcMain.on('win-maximize', () => { if(win){ win.isMaximized() ? win.unmaximize() : win.maximize() } })
 ipcMain.on('win-close', () => { if(win) win.close() })
+
+// Экспорт текущего скачанного инстанса в zip формата MultiMC/Prism (mmc-pack.json + instance.cfg + .minecraft/).
+// Ванильный клиент и Forge НЕ упаковываются — Prism скачает их сам по mmc-pack.json, экспортируется
+// только специфика сборки (моды/конфиги/kubejs/ресурспаки и т.п.), как при штатном экспорте из MultiMC.
+const EXPORT_EXCLUDE_DIRS = new Set(['logs', 'crash-reports', 'cache', '.cache', '.mixin.out', 'lightspeed-cache', 'saves'])
+const EXPORT_EXCLUDE_FILES = new Set(['servers.dat_old'])
+
+// Не можем require('./app/assets/js/configmanager') из main-процесса — этот модуль
+// делает require('@electron/remote') на верхнем уровне (валидно только в renderer),
+// что валит весь app при старте. Читаем dataDirectory из config.json напрямую.
+function getDataDirectory(){
+    const sysRoot = process.env.APPDATA || (process.platform === 'darwin' ? process.env.HOME + '/Library/Application Support' : process.env.HOME)
+    const defaultDataPath = path.join(sysRoot, '.esketitlauncher')
+    try {
+        const configPath = path.join(app.getPath('userData'), 'config.json')
+        const cfg = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+        return (cfg.settings && cfg.settings.launcher && cfg.settings.launcher.dataDirectory) || defaultDataPath
+    } catch(e){
+        return defaultDataPath
+    }
+}
+
+ipcMain.handle('export-instance', async (event, { serverId, minecraftVersion, forgeVersion, instanceName }) => {
+    try {
+        const instanceDir = path.join(getDataDirectory(), 'instances', serverId)
+        if(!fs.existsSync(instanceDir)) {
+            return { success: false, error: 'Инстанс ещё не скачан. Сначала запустите игру хотя бы раз.' }
+        }
+
+        const { canceled, filePath } = await dialog.showSaveDialog(win, {
+            title: 'Сохранить инстанс для Prism/MultiMC',
+            defaultPath: path.join(app.getPath('desktop'), `${instanceName || 'EsketitCraft'}-instance.zip`),
+            filters: [{ name: 'Zip Archive', extensions: ['zip'] }]
+        })
+        if(canceled || !filePath){
+            return { success: false, canceled: true }
+        }
+
+        const rootInZip = (instanceName || 'EsketitCraft').replace(/[\\/:*?"<>|]/g, '_')
+
+        const allFiles = []
+        const walk = (dir, rel) => {
+            for(const name of fs.readdirSync(dir)){
+                if(!rel && (EXPORT_EXCLUDE_DIRS.has(name) || EXPORT_EXCLUDE_FILES.has(name))) continue
+                const full = path.join(dir, name)
+                const relPath = rel ? path.join(rel, name) : name
+                const st = fs.statSync(full)
+                if(st.isDirectory()) walk(full, relPath)
+                else allFiles.push({ full, relPath })
+            }
+        }
+        walk(instanceDir, '')
+
+        const zip = new AdmZip()
+        let done = 0
+        for(const f of allFiles){
+            const zipDir = `${rootInZip}/.minecraft/${path.dirname(f.relPath).replace(/\\/g, '/')}`
+                .replace(/\/\.$/, '')
+            zip.addLocalFile(f.full, zipDir, path.basename(f.relPath))
+            done++
+            if(done % 25 === 0 || done === allFiles.length){
+                event.sender.send('export-instance-progress', { done, total: allFiles.length })
+                await new Promise(r => setImmediate(r))
+            }
+        }
+
+        const mmcPack = {
+            formatVersion: 1,
+            components: [
+                { important: true, uid: 'net.minecraft', version: minecraftVersion || '1.20.1' },
+                { uid: 'net.minecraftforge', version: forgeVersion || '47.4.20' }
+            ]
+        }
+        zip.addFile(`${rootInZip}/mmc-pack.json`, Buffer.from(JSON.stringify(mmcPack, null, 4)))
+        const instanceCfg = '[General]\nConfigVersion=1.2\nInstanceType=OneSix\n'
+            + `name=${instanceName || 'EsketitCraft'}\niconKey=default\n`
+        zip.addFile(`${rootInZip}/instance.cfg`, Buffer.from(instanceCfg))
+
+        zip.writeZip(filePath)
+
+        return { success: true, path: filePath, fileCount: allFiles.length }
+    } catch(err){
+        console.error('export-instance failed:', err)
+        return { success: false, error: err.message }
+    }
+})
 
 
 // Handle trash item.

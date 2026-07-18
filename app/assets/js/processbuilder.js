@@ -67,8 +67,22 @@ class ProcessBuilder {
         let args = this.constructJVMArguments(uberModArr, tempNativePath)
 
         if(mcVersionAtLeast('1.13', this.server.rawServer.minecraftVersion)){
-            //args = args.concat(this.constructModArguments(modObj.fMods))
-            args = args.concat(this.constructModList(modObj.fMods))
+            if(this.usingFabricLoader){
+                //args = args.concat(this.constructModArguments(modObj.fMods))
+                args = args.concat(this.constructModList(modObj.fMods))
+            } else {
+                // Не используем --fml.mavenRoots/--fml.modLists (модстор + внешний список).
+                // Вместо этого копируем реальные jar-файлы модов прямо в <instance>/mods —
+                // так инстанс выглядит и ведёт себя как обычная Minecraft-папка (совместимо
+                // с Prism/MultiMC и переносимо простым копированием), Forge грузит их через
+                // штатный сканер папки mods, без дублирующего classpath-механизма.
+                this.syncModsFolder(modObj.fMods)
+                // Старый forgeMods.list от прошлых запусков/версий больше не используется — убираем,
+                // чтобы не путать при ручном осмотре или экспорте инстанса.
+                if(fs.existsSync(this.forgeModListFile)){
+                    fs.removeSync(this.forgeModListFile)
+                }
+            }
         }
 
         // Hide access token
@@ -323,6 +337,61 @@ class ProcessBuilder {
             return []
         }
 
+    }
+
+    /**
+     * Синхронизирует физическую папку <instance>/mods с текущим набором включённых модов.
+     * Копирует jar-файлы из общего common/modstore (куда их кладёт загрузчик дистрибутива)
+     * напрямую в mods/ инстанса и удаляет оттуда всё лишнее (отключённые/удалённые из
+     * сборки моды). После этого mods/ — обычная Minecraft-папка модов, без скрытого
+     * classpath-механизма, и её можно скопировать/заэкспортировать как есть.
+     *
+     * @param {Array.<Object>} fMods Массив включённых ForgeMod-модулей.
+     */
+    syncModsFolder(fMods){
+        const modsDir = path.join(this.gameDir, 'mods')
+        fs.ensureDirSync(modsDir)
+
+        const desired = new Map() // basename -> source path
+        for(const mod of fMods){
+            const src = mod.getPath()
+            desired.set(path.basename(src), src)
+        }
+
+        // Удаляем лишние jar-файлы (отключённые/убранные из сборки моды).
+        for(const existing of fs.readdirSync(modsDir)){
+            if(!existing.toLowerCase().endsWith('.jar')) continue
+            if(!desired.has(existing)){
+                try {
+                    fs.removeSync(path.join(modsDir, existing))
+                } catch(err){
+                    logger.warn(`Не удалось удалить устаревший мод ${existing}:`, err)
+                }
+            }
+        }
+
+        // Копируем недостающие/изменившиеся моды. Предпочитаем hardlink (та же ФС, без
+        // дублирования места на диске — common/modstore и instance/mods обычно на одном
+        // томе); если не выйдет (другой раздел, сетевой путь и т.п.) — обычная копия.
+        for(const [name, src] of desired){
+            const dest = path.join(modsDir, name)
+            try {
+                const srcSize = fs.statSync(src).size
+                if(fs.existsSync(dest) && fs.statSync(dest).size === srcSize){
+                    continue
+                }
+                if(fs.existsSync(dest)){
+                    fs.removeSync(dest)
+                }
+                try {
+                    fs.linkSync(src, dest)
+                } catch(linkErr){
+                    fs.copyFileSync(src, dest)
+                }
+            } catch(err){
+                logger.warn(`Не удалось поместить мод ${name} в mods/:`, err)
+            }
+        }
     }
 
     _processAutoConnectArg(args){
