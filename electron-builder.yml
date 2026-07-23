@@ -1,6 +1,6 @@
 appId: 'net.esketit.launcher'
 productName: 'Esketit Launcher'
-artifactName: '${productName}-setup-${version}.${ext}'
+artifactName: 'Esketit-Launcher-setup-${version}.${ext}'
 
 copyright: 'Copyright © 2026 Esketit'
 
@@ -39,7 +39,7 @@ mac:
       arch:
         - 'x64'
         - 'arm64'
-  artifactName: '${productName}-setup-${version}-${arch}.${ext}'
+  artifactName: 'Esketit-Launcher-setup-${version}-${arch}.${ext}'
   category: 'public.app-category.games'
 
 # Linux Configuration
