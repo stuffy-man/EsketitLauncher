@@ -9,8 +9,10 @@ const AuthManager   = require('./assets/js/authmanager')
 const { DistroAPI } = require('./assets/js/distromanager')
 const { MSFT_OPCODE, MSFT_REPLY_TYPE } = require('./assets/js/ipcconstants')
 const ProcessBuilder = require('./assets/js/processbuilder')
-const { FullRepair, DistributionIndexProcessor, MojangIndexProcessor, downloadFile } = require('helios-core/dl')
-const { validateSelectedJvm, ensureJavaDirIsRoot, javaExecFromRoot, discoverBestJvmInstallation, latestOpenJDK, extractJdk } = require('helios-core/java')
+const { FullRepair, DistributionIndexProcessor, MojangIndexProcessor } = require('helios-core/dl')
+const { extractJdk } = require('helios-core/java')
+const { downloadWithMirrors } = require('./assets/js/mirror-bootstrap')
+const { discoverCompatibleJava, managedRuntimeSources, validateJavaExecutable } = require('./assets/js/java-runtime')
 
 ConfigManager.load()
 DistroAPI.commonDir = ConfigManager.getCommonDirectory()
@@ -100,12 +102,22 @@ function enterLanding(){
 // ─── Новости («Что нового») — динамически из news.json ─────────────────────────
 // Меняешь этот JSON на хостинге — новости в лаунчере обновляются (пересборка не нужна).
 // Для боевого сервера замени URL на свой, напр. https://твой-домен/news.json
-const NEWS_URL = 'https://stuffy-man.github.io/esketit-dist/news.json'
+const NEWS_URLS = [
+    'https://stuffy-man.github.io/esketit-dist/news.json',
+    'https://raw.githubusercontent.com/stuffy-man/esketit-dist/main/news.json'
+]
 async function loadNews(){
     const panel = $('newsPanel'), list = $('newsList')
     try {
         const got = require('got')
-        const data = (await got(NEWS_URL, { responseType: 'json', timeout: { request: 5000 } })).body
+        let data = null
+        for(const url of NEWS_URLS){
+            try {
+                data = (await got(url, { responseType: 'json', timeout: { request: 5000 } })).body
+                break
+            } catch(err){ console.warn('[News] source failed:', url, err.message || err) }
+        }
+        if(data == null) throw new Error('Новости недоступны')
         const items = Array.isArray(data) ? data : (data.items || [])
         if(!items.length){ panel.style.display = 'none'; return }
         list.innerHTML = ''
@@ -451,14 +463,13 @@ async function play(){
         let jExe = ConfigManager.getJavaExecutable(sid)
         let jvmOk = false
         if(jExe){
-            const d = await validateSelectedJvm(ensureJavaDirIsRoot(jExe), server.effectiveJavaOptions.supported)
-            jvmOk = d != null
+            jvmOk = await validateJavaExecutable(jExe, server.effectiveJavaOptions.supported) != null
         }
         if(!jvmOk){
             setStatus('Поиск подходящей Java…')
-            const jvm = await discoverBestJvmInstallation(ConfigManager.getDataDirectory(), server.effectiveJavaOptions.supported)
+            const jvm = await discoverCompatibleJava(ConfigManager.getDataDirectory(), server.effectiveJavaOptions.supported)
             if(jvm){
-                jExe = javaExecFromRoot(jvm.path)
+                jExe = jvm.executable
             } else {
                 setStatus('Скачивание Java (один раз)…')
                 jExe = await downloadJava(server.effectiveJavaOptions)
@@ -471,50 +482,25 @@ async function play(){
     }
 }
 
-// Windows x64 Java 17 download mirrors. api.adoptium.net (used by helios-core's latestOpenJDK) is
-// unreliable/blocked in some regions and makes the launcher hang forever on "Поиск подходящей Java…".
-// Instead we download a fixed Adoptium JRE .zip DIRECTLY from GitHub Releases: first our own
-// esketit-dist mirror (reachable by anyone who already downloaded the modpack from there), then
-// Adoptium's own GitHub release (bypasses the API). The Adoptium API stays only as a last resort.
-const JAVA_MIRRORS = {
-    17: [
-        'https://github.com/stuffy-man/esketit-dist/releases/download/runtime/OpenJDK17U-jre_x64_windows_hotspot_17.0.19_10.zip',
-        'https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.19%2B10/OpenJDK17U-jre_x64_windows_hotspot_17.0.19_10.zip'
-    ]
-}
-
 async function downloadJava(opts){
     const path = require('path'), fs = require('fs')
     const major = opts.suggestedMajor || 17
     const dataDir = ConfigManager.getDataDirectory()
     const runtimeDir = path.join(dataDir, 'runtime', process.arch)
-
-    // 1) Region-safe mirrors first (direct GitHub .zip, no api.adoptium.net query → no hang).
-    for(const url of (JAVA_MIRRORS[major] || [])){
-        try {
-            fs.mkdirSync(runtimeDir, { recursive: true })
-            const dest = path.join(runtimeDir, path.basename(url.split('?')[0]))
-            setStatus('Скачивание Java (один раз)…')
-            await downloadFile(url, dest, ({ percent }) => setDlPct(Math.trunc((percent || 0) * 100)))
-            setDlPct(100)
-            setStatus('Распаковка Java…')
-            const exe = await extractJdk(dest)
-            try { remote.getCurrentWindow().setProgressBar(-1) } catch(e){}
-            if(exe && fs.existsSync(exe)) return exe
-            console.warn('[Java] mirror extracted but javaw.exe missing:', url)
-        } catch(e){ console.error('[Java] mirror failed:', url, (e && e.message) || e) }
-    }
-
-    // 2) Last resort: Adoptium API (original behaviour) — may hang in blocked regions.
-    console.warn('[Java] all mirrors failed — falling back to Adoptium API')
-    const asset = await latestOpenJDK(major, dataDir, opts.distribution)
-    if(!asset) throw new Error('Не найден пакет Java')
+    const source = managedRuntimeSources(major)
+    fs.mkdirSync(runtimeDir, { recursive: true })
+    const archive = path.join(runtimeDir, source.filename)
     setStatus('Скачивание Java (один раз)…')
-    await downloadFile(asset.url, asset.path, ({ transferred }) => setDlPct(Math.trunc((transferred / asset.size) * 100)))
+    await downloadWithMirrors(source.urls, archive, ({ percent }) => {
+        setDlPct(Math.trunc((percent || 0) * 100))
+    })
     setDlPct(100)
     setStatus('Распаковка Java…')
-    const exe = await extractJdk(asset.path)
+    const exe = await extractJdk(archive)
     try { remote.getCurrentWindow().setProgressBar(-1) } catch(e){}
+    if(!exe || !fs.existsSync(exe)) throw new Error('Java распакована, но исполняемый файл не найден')
+    const valid = await validateJavaExecutable(exe, opts.supported)
+    if(!valid) throw new Error('Скачанная Java несовместима со сборкой')
     return exe
 }
 
@@ -551,7 +537,9 @@ async function dlAsync(){
             ConfigManager.getSelectedServer(),
             DistroAPI.isDevMode()
         )
-        fr.spawnReceiver()
+        const bootstrap = require('path').join(__dirname, 'assets', 'js', 'mirror-bootstrap.js').replace(/\\/g, '/')
+        const previousNodeOptions = process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : ''
+        fr.spawnReceiver({ NODE_OPTIONS: `${previousNodeOptions}--require="${bootstrap}"` })
         // Флаг: мы сами закрываем приёмник после проверки/скачивания. Иначе его «close»
         // с ненулевым кодом (от destroyReceiver) ложно вызывает «Ошибка запуска».
         let frClosedExpectedly = false

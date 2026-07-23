@@ -1,6 +1,6 @@
 {
   "name": "esketitlauncher",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "productName": "Esketit Launcher",
   "description": "Лаунчер сервера Esketit (Forge + моды)",
   "author": "Esketit",
@@ -17,7 +17,8 @@
     "dist:win": "npm run dist -- -w",
     "dist:mac": "npm run dist -- -m",
     "dist:linux": "npm run dist -- -l",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:runtime": "node scripts/smoke-runtime.js"
   },
   "engines": {
     "node": "22.x.x"
